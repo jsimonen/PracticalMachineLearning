@@ -1,0 +1,189 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "Janne Simonen"
+date: "Saturday, August 22, 2015"
+output: html_document
+---
+
+# Abstract
+
+In this project, we used data from accelerometers attached on the belt, forearm, arm, and dumbell of six participants. They were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).
+
+In other words, class A corresponds to the specified execution of the exercise, while the other 4 classes correspond to common mistakes. Our goal is to classify the quality of the repetitions with machine learning algorithms based on the accelerometer data.
+
+More information on the dataset is available from the website here: <http://groupware.les.inf.puc-rio.br/har> (see the section on the Weight Lifting Exercise Dataset). 
+
+# Setting up
+
+First, we set up things by loading required libraries and speed up the modeling by enabling parallel processing. We will be using the `caret` package in R to build our machine learning models.
+
+```{r, echo=FALSE, message=F, warning=F}
+library(caret)
+library(rpart)
+library(gbm)
+library(randomForest)
+library(plyr)
+library(doParallel)  # enable parallel calculationss to speed up a little
+registerDoParallel(cores=2)
+```
+
+# Load and preprocess the data
+
+We load the training and testing datasets we have previously downloaded from the above link.
+
+```{r}
+trainfile <- 'pml-training.csv'
+testfile <- 'pml-testing.csv'
+dataTrain <- read.csv(trainfile,stringsAsFactors = FALSE)
+dataTest <- read.csv(testfile,stringsAsFactors = FALSE)
+```
+
+Both datasets contain `r dim(dataTrain)[2]` variables. The training data has `r dim(dataTrain)[1]` observations and the test data contains `r dim(dataTest)[1]` test cases to evaluate.
+
+As usual, we need to clean the data first. The variable we are trying to predict, `classe` should be a factor variable with five levels from A to E, as described above.
+
+```{r}
+dataTrain$classe <- as.factor(dataTrain$classe)
+```
+
+Next, the both the training and testing data contain a huge number of variables without data, which we will remove.
+
+```{r}
+nasum <- colSums(is.na(dataTrain))
+dataTrain <- dataTrain[,nasum==0]
+nasum <- colSums(is.na(dataTest))
+dataTest <- dataTest[,nasum==0]
+
+```
+
+Also, all variables imported as character data have missing data as well, so we remove them, as well as a few other useless variables such as timestamps.
+
+```{r}
+charvars <- sapply(dataTrain,class)=='character'
+dataTrain <- dataTrain[,!charvars]
+dataTrain <- subset(dataTrain, select = -c(X, raw_timestamp_part_1,raw_timestamp_part_2,num_window) )
+
+charvars <- sapply(dataTest,class)=='character'
+dataTest <- dataTest[,!charvars]
+dataTest <- subset(dataTest, select = -c(X, raw_timestamp_part_1,raw_timestamp_part_2,num_window) )
+
+```
+
+We then split the training data into training (70%) and validation (30%) sets, since the provided testing data is in fact only provided for testing our predictions for grading purposes. We will train our models on the training set and compare their accuracy by predicting on the validation set. Finally the winning model will be used to predict the test data.
+
+```{r}
+inTrain <- createDataPartition(y=dataTrain$classe,p=0.7)[[1]]
+training <- dataTrain[inTrain,] 
+validation <- dataTrain[-inTrain,]
+
+```
+
+We are now left with `r dim(training)[2]` reasonable looking variables in the training data. It would be good to check the quality and correlations of the variables to get higher quality predictions faster, but it turned out that we could obtain good predictive models with the data as given.
+
+# Train the models
+
+We are now ready to begin training the machine learning algorithms. Since we are trying to classify data into five categories, models like linear regression are not useful. Instead, we decided to use three algorithms suitable for classification of data: recursive partitioning and regression trees, boosting and random forest. 
+
+To obtain better estimates of model accuracy, We will use five fold cross-validation when appropriate (trees and boosting).
+
+```{r}
+fitControl <- trainControl(## 5-fold CV
+  method = "repeatedcv",
+  number = 5,
+  repeats = 1)
+```
+
+Next, we will set up three classification models and compare their performance on the validation set to select the best one. We will use the caret package with default parameters, except for the cross-validation described above.
+
+## Trees
+
+We start our modeling with a classification tree. It is fast to train and suitable for classifying data. It works by finding the variable the splits the data best into two classes. Then it searches for the next best split and so on, building a decision tree with binary choices.
+
+Since the training takes some time, we save the model and only run the training if the save file does not exist.
+
+```{r, cache=TRUE}
+my_model_file <- "modTreeCV5full.rds"
+if (file.exists(my_model_file)) {
+    # Read the model in and assign it to a variable.
+   modTree <- readRDS(my_model_file)
+} else {
+    # Otherwise, run the training.
+    #trainingSmall <- training[sample(1:nrow(training),1000,replace=FALSE),]
+    modTree <- train(classe ~ ., data=training,method='rpart',trControl = fitControl)
+    saveRDS(modTree, file=my_model_file)
+    modTree$finalModel
+}
+```
+
+By inspecting the model, we notice that the tree failed to categorize anything into class D. This looks worrisome, but it could be that this is a problem with the data and not the model.
+
+## Boosting
+
+Boosting with trees works such that it builds a large number of trees and gives weights to each one to combine all predictions into one with a smaller error. It should produce better predictions than normal trees, but is much slower to train. Therefore we started with subsets of the data and gradually increased the size of the model to see if our computer resources could model the full training dataset. Luckily we were able to do this with our laptop computer.
+
+```{r, cache=TRUE}
+my_model_file <- "modGbmFullcv5.rds"
+if (file.exists(my_model_file)) {
+    # Read the model in and assign it to a variable.
+    modGbm <- readRDS(my_model_file)
+} else { # only train the model if previous model file does not exist
+    #trainingSmall <- training[sample(1:nrow(training),1000,replace=FALSE),]
+    modGbm <- train(classe ~ ., data=training,method='gbm',trControl = fitControl)
+    saveRDS(modGbm, file=my_model_file)
+}
+```
+
+## Random forest
+
+Finally, we train a random forest. Random forests are a way of averaging multiple deep decision trees, trained on different parts of the same training set, with the goal of reducing the variance. They generally greatly overperform decision trees, but are also very slow to train. Therefore, as with boosting, we started a subset of the data and gradually increased the size of the model. Also here our laptop proved sufficient to model the full training dataset in reasonable time.
+
+Cross-validation is not needed as for random forests as it is part of the algorithm.
+
+```{r,cache=FALSE}
+my_model_file <- "modRFFull.rds"
+if (file.exists(my_model_file)) {
+    # Read the model in and assign it to a variable.
+    modRF <- readRDS(my_model_file)
+} else { # only train the model if previous model file does not exist
+    modRF <- train(classe ~ ., data=training,method='rf')
+    saveRDS(modRF, file=my_model_file)
+} 
+```
+
+# Validation
+
+Now we will test our models by predicting the validation set. The model with the highest out-of-sample accuracy will be selected as the final model and used to predict the test set. Since the validation data was not used in training, it provides a non-biased estimate of the out-of-sample prediction accuracy.
+
+```{r}
+predTree <- predict(modTree,newdata=validation)
+predGbm <- predict(modGbm,newdata=validation)
+predRF <- predict(modRF,newdata=validation)
+accTree <- confusionMatrix(predTree,validation$classe)$overall
+accGbm <- confusionMatrix(predGbm,validation$classe)$overall
+accRF <- confusionMatrix(predRF,validation$classe)$overall
+testAccuracy <- data.frame(tree=accTree,boosting=accGbm,random_forest=accRF)
+testAccuracy
+```
+
+We can see that random forest is the most accurate with an **overall out-of-sample accuracy of `r testAccuracy[1,'random_forest']`, nearly 100%**. Boosting achieves nearly equal results, but the basic decision tree is very inaccurate. Therefore, we select the random forest model for our final prediction on the testing data.
+
+Here are the statistics of the random forest. First, the confusion matrix and accuracy measures.
+```{r}
+confusionMatrix(predRF,validation$classe)
+```
+
+Then the importance of variables in the models. We could probably simplify the model quite a lot by taking into account only the most important variables.
+
+```{r}
+varImp(modRF)
+```
+
+# Testing
+
+We now simply run our random forest model trained above on the provided testing data.
+```{r}
+predFinalRF <- predict(modRF,newdata=dataTest)
+predFinalRF
+```
+Those are the final predictions for the testing data. In fact, it turns out that our boosting model also gives identical predictions, so we are highly confident that we have predicted the correct classifications.
+
