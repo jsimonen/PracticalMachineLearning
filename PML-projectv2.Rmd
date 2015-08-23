@@ -84,7 +84,7 @@ We are now left with `r dim(training)[2]` reasonable looking variables in the tr
 
 We are now ready to begin training the machine learning algorithms. Since we are trying to classify data into five categories, models like linear regression are not useful. Instead, we decided to use three algorithms suitable for classification of data: recursive partitioning and regression trees, boosting and random forest. 
 
-To obtain better estimates of model accuracy, We will use five fold cross-validation when appropriate (trees and boosting).
+To obtain better estimates of model accuracy, We will use **five fold cross-validation** when appropriate (trees and boosting).
 
 ```{r}
 fitControl <- trainControl(## 5-fold CV

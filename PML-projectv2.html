@@ -109,7 +109,7 @@ validation &lt;- dataTrain[-inTrain,]</code></pre>
 <div id="train-the-models" class="section level1">
 <h1>Train the models</h1>
 <p>We are now ready to begin training the machine learning algorithms. Since we are trying to classify data into five categories, models like linear regression are not useful. Instead, we decided to use three algorithms suitable for classification of data: recursive partitioning and regression trees, boosting and random forest.</p>
-<p>To obtain better estimates of model accuracy, We will use five fold cross-validation when appropriate (trees and boosting).</p>
+<p>To obtain better estimates of model accuracy, We will use <strong>five fold cross-validation</strong> when appropriate (trees and boosting).</p>
 <pre class="r"><code>fitControl &lt;- trainControl(## 5-fold CV
   method = &quot;repeatedcv&quot;,
   number = 5,
@@ -170,48 +170,48 @@ accGbm &lt;- confusionMatrix(predGbm,validation$classe)$overall
 accRF &lt;- confusionMatrix(predRF,validation$classe)$overall
 testAccuracy &lt;- data.frame(tree=accTree,boosting=accGbm,random_forest=accRF)
 testAccuracy</code></pre>
-<pre><code>##                      tree boosting random_forest
-## Accuracy        5.038e-01   0.9718        0.9973
-## Kappa           3.518e-01   0.9643        0.9966
-## AccuracyLower   4.910e-01   0.9672        0.9956
-## AccuracyUpper   5.167e-01   0.9759        0.9984
-## AccuracyNull    2.845e-01   0.2845        0.2845
-## AccuracyPValue 2.519e-274   0.0000        0.0000
-## McnemarPValue         NaN      NaN           NaN</code></pre>
-<p>We can see that random forest is the most accurate with an <strong>overall out-of-sample accuracy of 0.9973, nearly 100%</strong>. Boosting achieves nearly equal results, but the basic decision tree is very inaccurate. Therefore, we select the random forest model for our final prediction on the testing data.</p>
+<pre><code>##                      tree  boosting random_forest
+## Accuracy        4.929e-01 9.675e-01        0.9966
+## Kappa           3.373e-01 9.590e-01        0.9957
+## AccuracyLower   4.801e-01 9.627e-01        0.9948
+## AccuracyUpper   5.058e-01 9.719e-01        0.9979
+## AccuracyNull    2.845e-01 2.845e-01        0.2845
+## AccuracyPValue 7.493e-249 0.000e+00        0.0000
+## McnemarPValue         NaN 3.567e-05           NaN</code></pre>
+<p>We can see that random forest is the most accurate with an <strong>overall out-of-sample accuracy of 0.9966, nearly 100%</strong>. Boosting achieves nearly equal results, but the basic decision tree is very inaccurate. Therefore, we select the random forest model for our final prediction on the testing data.</p>
 <p>Here are the statistics of the random forest. First, the confusion matrix and accuracy measures.</p>
 <pre class="r"><code>confusionMatrix(predRF,validation$classe)</code></pre>
 <pre><code>## Confusion Matrix and Statistics
 ## 
 ##           Reference
 ## Prediction    A    B    C    D    E
-##          A 1674    1    0    0    0
-##          B    0 1137    4    0    0
-##          C    0    1 1021    7    0
-##          D    0    0    1  956    1
-##          E    0    0    0    1 1081
+##          A 1673    2    0    0    0
+##          B    1 1136    4    0    0
+##          C    0    1 1018    7    0
+##          D    0    0    4  957    1
+##          E    0    0    0    0 1081
 ## 
 ## Overall Statistics
 ##                                         
 ##                Accuracy : 0.997         
-##                  95% CI : (0.996, 0.998)
+##                  95% CI : (0.995, 0.998)
 ##     No Information Rate : 0.284         
 ##     P-Value [Acc &gt; NIR] : &lt;2e-16        
 ##                                         
-##                   Kappa : 0.997         
+##                   Kappa : 0.996         
 ##  Mcnemar's Test P-Value : NA            
 ## 
 ## Statistics by Class:
 ## 
 ##                      Class: A Class: B Class: C Class: D Class: E
-## Sensitivity             1.000    0.998    0.995    0.992    0.999
-## Specificity             1.000    0.999    0.998    1.000    1.000
-## Pos Pred Value          0.999    0.996    0.992    0.998    0.999
-## Neg Pred Value          1.000    1.000    0.999    0.998    1.000
+## Sensitivity             0.999    0.997    0.992    0.993    0.999
+## Specificity             1.000    0.999    0.998    0.999    1.000
+## Pos Pred Value          0.999    0.996    0.992    0.995    1.000
+## Neg Pred Value          1.000    0.999    0.998    0.999    1.000
 ## Prevalence              0.284    0.194    0.174    0.164    0.184
-## Detection Rate          0.284    0.193    0.173    0.162    0.184
-## Detection Prevalence    0.285    0.194    0.175    0.163    0.184
-## Balanced Accuracy       1.000    0.999    0.997    0.996    0.999</code></pre>
+## Detection Rate          0.284    0.193    0.173    0.163    0.184
+## Detection Prevalence    0.285    0.194    0.174    0.163    0.184
+## Balanced Accuracy       0.999    0.998    0.995    0.996    1.000</code></pre>
 <p>Then the importance of variables in the models. We could probably simplify the model quite a lot by taking into account only the most important variables.</p>
 <pre class="r"><code>varImp(modRF)</code></pre>
 <pre><code>## rf variable importance
